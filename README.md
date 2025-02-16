@@ -58,6 +58,7 @@ python3 image_stitching.py
 9.  **Save and Display Results**  
     The detected circles are drawn on the image and saved.  
     <img src="output/hough_result.jpg" width="300">
+    <img src="output/hough_terminal_result.jpg" width="300">
 
 ## Watershed Algorithm-Based Coin Detection
 
