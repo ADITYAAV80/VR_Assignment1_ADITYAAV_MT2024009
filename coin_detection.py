@@ -169,10 +169,36 @@ class WatershedProcessor:
 if __name__ == "__main__":
     
     path1 = "images/hough_input.jpg"
-    cd = HoughCoinDetector()
+
+    downsample_size = int(input("Enter downsample size for images (default 512): ") or 512)
+    gaussian_kernel = tuple(map(int, input("Enter Gaussian kernel size (default 3 3): ").split() or [3, 3]))
+    morph_kernel_size = tuple(map(int, input("Enter Morphological kernel size (default 5 5): ").split() or [5, 5]))
+    dist_thresh_factor = float(input("Enter Distance threshold factor for segmentation (default 0.8): ") or 0.8)
+    morphology_iterations = int(input("Enter number of iterations for morphological operations (default 1): ") or 1)
+    erode_iterations = int(input("Enter number of iterations for erosion (default 3): ") or 3)
+
+    hough_params = {
+        "downsample_size": downsample_size,
+        "gaussian_kernel": gaussian_kernel,
+        "morph_kernel_size": morph_kernel_size,
+        "dist_thresh_factor": dist_thresh_factor
+    }
+
+    watershed_params = {
+        "downsample_size": downsample_size,
+        "gaussian_kernel": gaussian_kernel,
+        "morph_kernel_size": morph_kernel_size,
+        "dist_thresh_factor": dist_thresh_factor,
+        "morphology_iterations": morphology_iterations,
+        "erode_iterations": erode_iterations
+    }
+
+
+    cd = HoughCoinDetector(**hough_params)
     cd.process_hough(path1)
 
     path2 = "images/watershed_input.jpg"
-    wt = WatershedProcessor()
+
+    wt = WatershedProcessor(**watershed_params)
     wt.process_watershed(path2)
 
