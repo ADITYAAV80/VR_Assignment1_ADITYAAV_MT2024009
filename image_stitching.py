@@ -90,28 +90,96 @@ class ImageStitcher:
         transformed_img = cv2.remap(img, map_x, map_y, interpolation=cv2.INTER_LINEAR)
         return transformed_img, np.array(mask_x), np.array(mask_y)
 
-    def stitch_images(self, base_image, sec_image):
-        """
-        Stitches two images together using cylindrical projection and homography.
-        """
-        sec_image_cyl, mask_x, mask_y = self.cylindrical_projection(sec_image)
-        sec_mask = np.zeros(sec_image_cyl.shape, dtype=np.uint8)
-        sec_mask[mask_y, mask_x, :] = 255
+    def stitch_images(self,BaseImage, SecImage):
+        
+        # Applying Cylindrical projection on SecImage
+        SecImage_Cyl, mask_x, mask_y = self.cylindrical_projection(SecImage)
 
-        matches, base_kp, sec_kp = self.find_matches(base_image, sec_image_cyl)
-        homography_matrix = self.find_homography(matches, base_kp, sec_kp)
-        new_size, correction, homography_matrix = self.get_new_frame_size_and_matrix(homography_matrix, sec_image_cyl.shape[:2], base_image.shape[:2])
+        # Getting SecImage Mask
+        SecImage_Mask = np.zeros(SecImage_Cyl.shape, dtype=np.uint8)
+        SecImage_Mask[mask_y, mask_x, :] = 255
 
-        sec_transformed = cv2.warpPerspective(sec_image_cyl, homography_matrix, (new_size[1], new_size[0]))
-        sec_mask_transformed = cv2.warpPerspective(sec_mask, homography_matrix, (new_size[1], new_size[0]))
+        # Finding matches between the 2 images and their keypoints
+        Matches, BaseImage_kp, SecImage_kp = self.find_matches(BaseImage, SecImage_Cyl)
 
-        base_transformed = np.zeros((new_size[0], new_size[1], 3), dtype=np.uint8)
-        base_transformed[correction[1]:correction[1]+base_image.shape[0], correction[0]:correction[0]+base_image.shape[1]] = base_image
+        # Finding homography matrix.
+        HomographyMatrix = self.find_homography(Matches, BaseImage_kp, SecImage_kp)
 
-        stitched_image = cv2.bitwise_or(sec_transformed, cv2.bitwise_and(base_transformed, cv2.bitwise_not(sec_mask_transformed)))
+        # Finding size of new frame of stitched images and updating the homography matrix
+        NewFrameSize, Correction, HomographyMatrix = self.get_new_frame_size_and_matrix(HomographyMatrix, SecImage_Cyl.shape[:2], BaseImage.shape[:2])
 
-        cv2.imwrite("output/panaroma_stitchedImage.jpg", stitched_image)
-        return stitched_image
+        # Transform images to the new coordinate frame
+        SecImage_Transformed = cv2.warpPerspective(SecImage_Cyl, HomographyMatrix, (NewFrameSize[1], NewFrameSize[0]))
+        SecImage_Transformed_Mask = cv2.warpPerspective(SecImage_Mask, HomographyMatrix, (NewFrameSize[1], NewFrameSize[0]))
+
+        #     # Ensure the mask is smooth (float values between 0 and 1)
+        # SecImage_Transformed_Mask = cv2.GaussianBlur(SecImage_Transformed_Mask, (21, 21), sigmaX=10, sigmaY=10)
+
+        # # Convert mask to 3 channels for blending (if images are colored)
+        # SecImage_Transformed_Mask = cv2.merge([SecImage_Transformed_Mask] * 3)
+
+        # # Blend images smoothly instead of bitwise operations
+
+        
+        # # plt.imshow(cv2.cvtColor(SecImage_Transformed,cv2.COLOR_BGR2RGB))
+        # # plt.show()
+        # # plt.imshow(cv2.cvtColor(SecImage_Transformed_Mask,cv2.COLOR_BGR2RGB))
+        # # plt.show()
+        # BaseImage_Transformed = np.zeros((NewFrameSize[0], NewFrameSize[1], 3), dtype=np.uint8)
+        # BaseImage_Transformed[Correction[1]:Correction[1]+BaseImage.shape[0], Correction[0]:Correction[0]+BaseImage.shape[1]] = BaseImage
+
+        # _, BinaryMask = cv2.threshold(SecImage_Transformed_Mask, 1, 255, cv2.THRESH_BINARY)
+
+        # # Define center for blending
+        # center = (NewFrameSize[1] // 2, NewFrameSize[0] // 2)
+
+        # StitchedImage = (SecImage_Transformed * SecImage_Transformed_Mask) + (BaseImage_Transformed * (1 - SecImage_Transformed_Mask))
+        # StitchedImage = StitchedImage.astype(np.uint8)
+
+        #StitchedImage = cv2.bitwise_or(SecImage_Transformed, cv2.bitwise_and(BaseImage_Transformed, cv2.bitwise_not(SecImage_Transformed_Mask)))
+
+        # # Apply Poisson blending
+        # #StitchedImage = feather_blend(SecImage_Transformed, BaseImage_Transformed, BinaryMask)
+
+        # return StitchedImage
+
+        #SecImage_Transformed = cv2.warpPerspective(SecImage_Cyl, HomographyMatrix, (NewFrameSize[1], NewFrameSize[0]))
+        #SecImage_Transformed_Mask = cv2.warpPerspective(SecImage_Mask, HomographyMatrix, (NewFrameSize[1], NewFrameSize[0]))
+
+        # Smoothen the mask
+        SecImage_Transformed_Mask = cv2.GaussianBlur(SecImage_Transformed_Mask, (3, 3), sigmaX=0, sigmaY=0)
+
+        # Normalize the mask (important!)
+        SecImage_Transformed_Mask = SecImage_Transformed_Mask.astype(np.float32) / 255.0
+
+        # Convert to 3 channels if necessary
+        #if len(SecImage_Transformed_Mask.shape) == 2:
+        #    SecImage_Transformed_Mask = cv2.merge([SecImage_Transformed_Mask] * 3)
+
+        # Initialize the base image with black background
+        BaseImage_Transformed = np.zeros((NewFrameSize[0], NewFrameSize[1], 3), dtype=np.uint8)
+        BaseImage_Transformed[Correction[1]:Correction[1]+BaseImage.shape[0], Correction[0]:Correction[0]+BaseImage.shape[1]] = BaseImage
+
+        # Blending images smoothly using weighted sum
+        alpha = SecImage_Transformed_Mask
+        beta = 1 - alpha
+        StitchedImage = (SecImage_Transformed * alpha) + (BaseImage_Transformed * beta)
+        StitchedImage = np.clip(StitchedImage, 0, 255).astype(np.uint8)
+
+        #     # Convert stitched image to grayscale
+        # gray = cv2.cvtColor(StitchedImage, cv2.COLOR_BGR2GRAY)
+
+        # # Create mask for dark regions (thresholding)
+        # _, mask = cv2.threshold(gray, 25, 255, cv2.THRESH_BINARY_INV)  # Pixels close to black
+
+        # # Inpaint black regions using surrounding pixels
+        # StitchedImage = cv2.inpaint(StitchedImage, mask, inpaintRadius=20, flags=cv2.INPAINT_TELEA)
+
+
+        #StitchedImage = cv2.GaussianBlur(StitchedImage, (7, 7), sigmaX=0, sigmaY=0)
+
+
+        return StitchedImage
 
 if __name__ == "__main__":
 
