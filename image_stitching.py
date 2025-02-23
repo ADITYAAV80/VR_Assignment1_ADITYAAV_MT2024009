@@ -192,6 +192,8 @@ if __name__ == "__main__":
 
     for i in range(1, len(images)):
         base_image = stitcher.stitch_images(base_image, images[i])
+    
+    cv2.imwrite("output/panaroma_stitchedImage.jpg", base_image)
 
     plt.imshow(cv2.cvtColor(base_image, cv2.COLOR_BGR2RGB))
     plt.show()
